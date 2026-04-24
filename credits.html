@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Credits</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,700;1,400&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  :root {
+    --bg: #0e0d0b;
+    --paper: #f0ead8;
+    --ink: #1a1714;
+    --accent: #c9472f;
+    --muted: #7a7060;
+    --line: #d4c9b0;
+  }
+
+  html, body { width: 100%; height: 100%; }
+
+  body {
+    background: var(--bg);
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+    font-family: 'DM Mono', monospace;
+    overflow: hidden;
+  }
+
+  canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* Grain */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='1'/%3E%3C/svg%3E");
+    opacity: 0.04;
+    pointer-events: none;
+    z-index: 1;
+  }
+
+  .card {
+    background: var(--paper);
+    width: 100%;
+    max-width: 540px;
+    padding: 3.5rem 3rem 3rem;
+    position: relative;
+    z-index: 2;
+    box-shadow:
+      8px 8px 0 #000,
+      16px 16px 0 rgba(0,0,0,0.18),
+      0 40px 90px rgba(0,0,0,0.65);
+    animation: drop-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both,
+               bob 7s ease-in-out 0.7s infinite;
+  }
+
+  @keyframes drop-in {
+    from { opacity: 0; transform: translateY(36px) rotate(-0.5deg); }
+    to   { opacity: 1; transform: translateY(0) rotate(0deg); }
+  }
+
+  @keyframes bob {
+    0%, 100% { transform: translateY(0px); }
+    50%       { transform: translateY(-7px); }
+  }
+
+  /* Red corner tab */
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 0; height: 0;
+    border-style: solid;
+    border-width: 0 3.5rem 3.5rem 0;
+    border-color: transparent var(--accent) transparent transparent;
+  }
+
+  .label {
+    font-size: 0.6rem;
+    font-weight: 400;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.5rem;
+  }
+
+  h1 {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.2rem;
+    font-weight: 700;
+    color: var(--ink);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  h1 em {
+    font-style: italic;
+    color: var(--accent);
+  }
+
+  .rule {
+    width: 100%;
+    height: 1px;
+    background: var(--line);
+    margin: 1.8rem 0;
+    position: relative;
+  }
+
+  .rule::after {
+    content: '✦';
+    position: absolute;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--paper);
+    color: var(--muted);
+    font-size: 0.6rem;
+    padding: 0 0.5rem;
+  }
+
+  .credits-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1.6rem;
+  }
+
+  .credit-item {
+    position: relative;
+    padding-right: 2rem;
+    opacity: 0;
+    animation: fade-up 0.5s ease both;
+  }
+
+  .credit-item:nth-child(1) { animation-delay: 0.25s; }
+  .credit-item:nth-child(2) { animation-delay: 0.4s; }
+  .credit-item:nth-child(3) { animation-delay: 0.55s; }
+
+  @keyframes fade-up {
+    from { opacity: 0; transform: translateY(10px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .credit-role {
+    display: block;
+    font-size: 0.62rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 0.2rem;
+  }
+
+  .credit-name {
+    display: block;
+    font-family: 'Playfair Display', serif;
+    font-size: 1.35rem;
+    font-weight: 400;
+    color: var(--ink);
+    line-height: 1.2;
+    margin-bottom: 0.25rem;
+  }
+
+  .credit-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    text-decoration: none;
+    font-size: 0.7rem;
+    font-weight: 300;
+    color: var(--accent);
+    transition: letter-spacing 0.25s ease;
+    word-break: break-all;
+  }
+
+  .credit-link:hover { letter-spacing: 0.03em; }
+  .credit-link::before { content: '→'; flex-shrink: 0; }
+
+  .num {
+    position: absolute;
+    right: -0.3rem; top: -0.4rem;
+    font-family: 'Playfair Display', serif;
+    font-size: 4rem;
+    font-weight: 700;
+    color: rgba(0,0,0,0.05);
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  .footer-note {
+    font-size: 0.6rem;
+    color: var(--muted);
+    letter-spacing: 0.1em;
+    text-align: right;
+    margin-top: 2.5rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .reset-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: none;
+    border: 1px solid var(--line);
+    color: var(--muted);
+    font-family: 'DM Mono', monospace;
+    font-size: 0.58rem;
+    font-weight: 400;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.35rem 0.7rem;
+    cursor: pointer;
+    transition: border-color 0.2s, color 0.2s, background 0.2s;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .reset-btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: rgba(201,71,47,0.06);
+  }
+
+  .reset-btn:active {
+    background: rgba(201,71,47,0.13);
+  }
+
+  .reset-btn::before {
+    content: '↺';
+    font-size: 0.75rem;
+    line-height: 1;
+  }
+
+  .reset-btn.done {
+    border-color: #6a9a6a;
+    color: #6a9a6a;
+    background: rgba(106,154,106,0.07);
+    pointer-events: none;
+  }
+
+  .reset-btn.done::before { content: '✓'; }
+</style>
+</head>
+<body>
+
+<canvas id="bg"></canvas>
+
+<div class="card">
+  <p class="label">acknowledgements</p>
+  <h1>Cre<em>dits</em></h1>
+  <div class="rule"></div>
+
+  <div class="credits-list">
+    <div class="credit-item">
+      <span class="num">1</span>
+      <span class="credit-role">Mathematics &amp; Support</span>
+      <span class="credit-name">gn-math</span>
+      <a class="credit-link" href="https://discord.gg/pe2yrsuQtH" target="_blank" rel="noopener">discord.gg/pe2yrsuQtH</a>
+    </div>
+    <div class="credit-item">
+      <span class="num">2</span>
+      <span class="credit-role">404 Not Found — Page Concept</span>
+      <span class="credit-name">Original Idea</span>
+      <a class="credit-link" href="https://discord.gg/VNT4E7gN5Y" target="_blank" rel="noopener">discord.gg/VNT4E7gN5Y</a>
+    </div>
+    <div class="credit-item">
+      <span class="num">3</span>
+      <span class="credit-role">Website Creation</span>
+      <span class="credit-name">Thrasyboulos</span>
+      <a class="credit-link" href="mailto:thrasyboulos@proton.me">thrasyboulos@proton.me</a>
+    </div>
+  </div>
+
+  <div class="footer-note">
+    <button class="reset-btn" id="resetBtn" onclick="clearAndReset()">Reset page (clear cookies)</button>
+    <span>with gratitude &nbsp;✦</span>
+  </div>
+</div>
+
+<script>
+(function () {
+  const canvas = document.getElementById('bg');
+  const ctx    = canvas.getContext('2d');
+
+  // Warm palette matching the card's color world
+  const COLORS = [
+    [201, 71,  47],   // accent red
+    [180, 110, 55],   // warm amber
+    [122, 112, 96],   // muted stone
+    [240, 220, 180],  // pale cream
+  ];
+
+  let W, H, particles;
+
+  function resize() {
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
+
+  function rand(a, b) { return a + Math.random() * (b - a); }
+
+  function spawn(startY) {
+    const [r, g, b] = COLORS[Math.floor(Math.random() * COLORS.length)];
+    return {
+      x: rand(0, W),
+      y: startY !== undefined ? startY : rand(0, H),
+      r: rand(1.5, 3.5),
+      vy: -rand(0.06, 0.22),
+      vx: rand(-0.08, 0.08),
+      wobble: rand(0, Math.PI * 2),
+      wSpeed:  rand(0.003, 0.007),
+      wAmp:    rand(0.25, 0.65),
+      alpha:   rand(0.05, 0.18),
+      r_: r, g_: g, b_: b,
+    };
+  }
+
+  function init() {
+    resize();
+    const COUNT = Math.min(60, Math.floor((W * H) / 15000));
+    particles = Array.from({ length: COUNT }, () => spawn());
+  }
+
+  let last = 0;
+
+  function frame(ts) {
+    const dt = Math.min(ts - last, 40);
+    last = ts;
+
+    ctx.clearRect(0, 0, W, H);
+
+    for (const p of particles) {
+      p.wobble += p.wSpeed * dt;
+      p.x += (p.vx + Math.sin(p.wobble) * p.wAmp * 0.014) * dt;
+      p.y += p.vy * (dt / 16);
+
+      // Recycle when off top
+      if (p.y + p.r * 4 < 0) {
+        Object.assign(p, spawn(H + p.r * 4));
+        p.y = H + p.r * 4;
+      }
+      if (p.x > W + 10) p.x = -10;
+      if (p.x < -10)    p.x = W + 10;
+
+      // Soft radial glow — no blur/shadow for perf
+      const glow = p.r * 4;
+      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, glow);
+      g.addColorStop(0,   `rgba(${p.r_},${p.g_},${p.b_},${p.alpha})`);
+      g.addColorStop(0.35,`rgba(${p.r_},${p.g_},${p.b_},${p.alpha * 0.4})`);
+      g.addColorStop(1,   `rgba(${p.r_},${p.g_},${p.b_},0)`);
+
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, glow, 0, Math.PI * 2);
+      ctx.fillStyle = g;
+      ctx.fill();
+    }
+
+    requestAnimationFrame(frame);
+  }
+
+  window.addEventListener('resize', () => { resize(); });
+  init();
+  requestAnimationFrame(frame);
+})();
+
+function clearAndReset() {
+  // Clear all cookies for this domain
+  document.cookie.split(';').forEach(cookie => {
+    const name = cookie.split('=')[0].trim();
+    document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/';
+    document.cookie = name + '=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/;domain=' + location.hostname;
+  });
+
+  // Clear localStorage & sessionStorage if available
+  try { localStorage.clear(); } catch(e) {}
+  try { sessionStorage.clear(); } catch(e) {}
+
+  // Brief "done" flash, then reload
+  const btn = document.getElementById('resetBtn');
+  btn.classList.add('done');
+  btn.textContent = 'Cleared — reloading…';
+  setTimeout(() => location.reload(), 800);
+}
+</script>
+</body>
+</html>
