@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 Not Found</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: white;
+            color: black;
+            font-family: "Times New Roman", Times, serif;
+        }
+
+        #fake-404 {
+            padding: 8px;
+        }
+
+        #fake-404 h1 {
+            font-size: 2em;
+            margin-block-start: 0.67em;
+            margin-block-end: 0.67em;
+            font-weight: bold;
+        }
+
+        #content-frame {
+            display: none;
+            width: 100vw;
+            height: 100vh;
+            border: none;
+        }
+
+        /* Unlocked state styles */
+        body.unlocked {
+            overflow: hidden;
+            background-color: transparent;
+        }
+
+        body.unlocked #fake-404 { 
+            display: none; 
+        }
+
+        body.unlocked #content-frame { 
+            display: block; 
+        }
+    </style>
+</head>
+<body>
+
+    <div id="fake-404">
+        <center><h1>404 Not Found</h1></center>
+        <hr><center>nginx/1.18.0</center>
+    </div>
+
+    <iframe id="content-frame" src="about:blank"></iframe>
+
+    <script>
+        const secretCodes = {
+            "seahawks": "real-site.html",
+            "antimatter": "antimatter.html",
+            "gn": "gn.html"
+        };
+        
+        let inputBuffer = "";
+        const maxBufferLength = Math.max(...Object.keys(secretCodes).map(code => code.length));
+
+        function unlockSite(targetUrl) {
+            document.body.classList.add('unlocked');
+            document.title = "Clever"; // Restores the original title upon unlocking
+            document.getElementById('content-frame').src = targetUrl;
+            document.cookie = "access_granted=" + targetUrl + "; max-age=" + (60 * 60 * 24 * 30) + "; path=/";
+        }
+
+        const cookie = document.cookie.split(';').find((item) => item.trim().startsWith('access_granted='));
+        if (cookie) {
+            let savedUrl = cookie.split('=')[1].trim();
+            if (savedUrl === "true") savedUrl = "real-site.html"; 
+            unlockSite(savedUrl);
+        }
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key.length === 1) {
+                inputBuffer += e.key;
+                
+                if (inputBuffer.length > maxBufferLength) {
+                    inputBuffer = inputBuffer.substring(inputBuffer.length - maxBufferLength);
+                }
+                
+                for (const code in secretCodes) {
+                    if (inputBuffer.endsWith(code)) {
+                        unlockSite(secretCodes[code]);
+                        inputBuffer = ""; 
+                        break; 
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
