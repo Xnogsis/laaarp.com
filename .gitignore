@@ -1,0 +1,6 @@
+/celeste-assets/
+/snow-rider-assets/
+/buckshot-assets/
+
+__pycache__/
+node_modules/

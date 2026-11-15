@@ -3,97 +3,78 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>404 Not Found</title>
+    <title>Clever</title>
     <style>
-        body {
-            margin: 0;
-            padding: 0;
-            background-color: white;
-            color: black;
-            font-family: "Times New Roman", Times, serif;
-        }
-
-        #fake-404 {
-            padding: 8px;
-        }
-
-        #fake-404 h1 {
-            font-size: 2em;
-            margin-block-start: 0.67em;
-            margin-block-end: 0.67em;
-            font-weight: bold;
-        }
-
-        #content-frame {
-            display: none;
-            width: 100vw;
-            height: 100vh;
-            border: none;
-        }
-
-        /* Unlocked state styles */
-        body.unlocked {
-            overflow: hidden;
-            background-color: transparent;
-        }
-
-        body.unlocked #fake-404 { 
-            display: none; 
-        }
-
-        body.unlocked #content-frame { 
-            display: block; 
-        }
+        body { margin: 8px; font-family: serif; text-align: center; }
+        h1 { font-size: 2em; }
+        #message { min-height: 1em; }
     </style>
 </head>
 <body>
-
-    <div id="fake-404">
-        <center><h1>404 Not Found</h1></center>
-        <hr><center>nginx/1.18.0</center>
-    </div>
-
-    <iframe id="content-frame" src="about:blank"></iframe>
-
+    <h1>404 Not Found</h1>
+    <hr>
+    <p>nginx/1.18.0</p>
+    <p id="message" role="status" aria-live="polite"></p>
+    <button id="open" type="button" hidden>Open</button>
     <script>
-        const secretCodes = {
-            "credits": "credits.html",
-            "antimatter": "antimatter.html",
-            "gn": "gn.html"
-        };
-        
-        let inputBuffer = "";
-        const maxBufferLength = Math.max(...Object.keys(secretCodes).map(code => code.length));
-
-        function unlockSite(targetUrl) {
-            document.body.classList.add('unlocked');
-            document.title = "Clever"; // Restores the original title upon unlocking
-            document.getElementById('content-frame').src = targetUrl;
-            document.cookie = "access_granted=" + targetUrl + "; max-age=" + (60 * 60 * 24 * 30) + "; path=/";
+        // This gate encrypts the entry launcher only; direct pages remain public.
+        const payload = 'lxDK0zGrBxtC50mcv0OgqnC1WMg4nXGTNrL/cIy1i7jr3MgVINwZcYB187seHuS+3L8jl+vvGio6h45f9797leSXwNJuNSZG6nQ0aBtZK0//r6XFLRHbyG4WeqvzFPUAGVgUOjGxoB65hjK8vqVpXOzr6X3EFNALV5c+0bIj+lBQIg2VOnX5IibColFGzNGFsNPemf7zDJWWw0pn+pdEfGz2YHEI1BCnQTqfaMLoSWbP78aTtKZ+vZaabJgW88WhZAexcsRQaEeHzi5CJYpAG/mAbhSksI+SjzR1jKlLWpGALCEkviu9/SPuCOL7xtqa3gEDH6mrdkNlLoMnku5GUEwm/9n5tswEki+HQqk6/ZqqWacbuT52+NmLd4ABAvDt9gQ0hThRIZXVDr3F6N7GKlvjacK64v/uh2YrfaGt2Iwda8tAezgX0gDRUdvmwi2JPG1bT7UbJMxPGfYmdlr5c0LkIF2WWueqI7GPbNsXqo1psfV5zpE/LByUUaSIZ1v2YQujq47NmnIkeTOZtYxuLvTey6Xv8o613Q0JlBElM0KN6SoUh/KUawOj6XBQaAKBo0XsAtbi6MGh5dpElYbtyAsxrbJvq/+S0xtLCFSB4KXAmat4wG3S6uYi/SwUe/F+dVJBrscHsPBGCMzhKPltVjIylxLVJsni1DmPyy1EDKD+xDwlj2X/CKswBibSN6c=';
+        const button = document.getElementById('open');
+        const message = document.getElementById('message');
+        let launcher;
+        const PASSWORD_LENGTH = 6;
+        let typed = '';
+        let checkPassword;
+        function launch() {
+            const tab = window.open('about:blank', '_blank');
+            if (!tab) {
+                message.textContent = 'Pop-up blocked. Allow pop-ups, then choose Open.';
+                button.hidden = false;
+                return;
+            }
+            const saved = document.cookie.split(';').find(item => item.trim().startsWith('access_granted='))?.split('=')[1]?.trim();
+            const target = new URL(launcher.pages.includes(saved) ? saved : launcher.pages[0], location.href).href;
+            tab.document.open();
+            tab.document.write(launcher.html);
+            tab.document.close();
+            tab.document.getElementById('content-frame').src = target;
+            tab.opener = null;
+            tab.focus();
+            location.replace('https://www.google.com/');
         }
-
-        const cookie = document.cookie.split(';').find((item) => item.trim().startsWith('access_granted='));
-        if (cookie) {
-            let savedUrl = cookie.split('=')[1].trim();
-            if (savedUrl === "true") savedUrl = "real-site.html"; 
-            unlockSite(savedUrl);
+        async function unlock(submitted = false) {
+            if (button.disabled) return;
+            if (launcher) { launch(); return; }
+            button.disabled = true;
+            message.textContent = '';
+            const password = typed;
+            if (submitted) typed = '';
+            try {
+                const bytes = Uint8Array.from(atob(payload), char => char.charCodeAt(0));
+                const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']);
+                const key = await crypto.subtle.deriveKey({name:'PBKDF2', salt:bytes.slice(0,16), iterations:100000, hash:'SHA-256'}, material, {name:'AES-GCM', length:256}, false, ['decrypt']);
+                const clear = await crypto.subtle.decrypt({name:'AES-GCM', iv:bytes.slice(16,28)}, key, bytes.slice(28));
+                launcher = JSON.parse(new TextDecoder().decode(clear));
+            } catch (_) {
+                if (submitted) message.textContent = 'nope';
+            }
+            button.disabled = false;
+            if (launcher) launch();
+            else if (typed && typed !== password) unlock();
         }
-
-        window.addEventListener('keydown', (e) => {
-            if (e.key.length === 1) {
-                inputBuffer += e.key;
-                
-                if (inputBuffer.length > maxBufferLength) {
-                    inputBuffer = inputBuffer.substring(inputBuffer.length - maxBufferLength);
-                }
-                
-                for (const code in secretCodes) {
-                    if (inputBuffer.endsWith(code)) {
-                        unlockSite(secretCodes[code]);
-                        inputBuffer = ""; 
-                        break; 
-                    }
-                }
+        button.addEventListener('click', launch);
+        document.addEventListener('keydown', event => {
+            if (event.ctrlKey || event.metaKey || event.altKey || event.isComposing || event.target === button) return;
+            if (event.key.length === 1 || event.key === 'Enter' || event.key === 'Backspace') clearTimeout(checkPassword);
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                unlock(true);
+            } else if (event.key === 'Backspace') {
+                event.preventDefault();
+                typed = typed.slice(0, -1);
+            } else if (event.key.length === 1) {
+                typed = (typed + event.key).slice(-PASSWORD_LENGTH);
+                if (typed.length >= PASSWORD_LENGTH) checkPassword = setTimeout(() => unlock(), 100);
             }
         });
     </script>

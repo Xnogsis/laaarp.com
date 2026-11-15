@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clever</title>
+    <script>if (localStorage.theme !== "light") document.documentElement.classList.add("dark");</script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <header id="top">
+        <a class="brand" href="home.html">larp.mom</a>
+        <nav><a href="home.html" aria-current="page">Home</a><a href="gnmath.html">Games</a><a href="ugs.html">UGS</a></nav>
+        <button type="button" id="theme">Light</button>
+    </header>
+
+    <main class="home">
+        <div>
+            <section>
+                <h1>Games</h1>
+                <p>Single games have been moved to the <a href="gnmath.html">Games tab</a>.</p>
+            </section>
+
+            <section>
+                <ul class="page-list">
+                    <li><a class="page-link" href="gnmath.html"><b>Games</b><small>The main collection: illustrated cards, browser games, and our locally hosted games.</small><span class="arrow">&rarr;</span></a></li>
+                    <li><a class="page-link" href="ugs.html"><b>UGS</b><small>A larger collection of single-file games, listed by title.</small><span class="arrow">&rarr;</span></a></li>
+                </ul>
+            </section>
+
+            <section aria-labelledby="recent-title">
+                <h2 id="recent-title">Recently played</h2>
+                <p id="recent-empty" class="muted">Games you open will appear here on this browser.</p>
+                <ul id="recent-games" class="discovery-grid"></ul>
+                <button type="button" id="clear-recent" hidden>Clear play history</button>
+            </section>
+
+            <section class="experiments-section">
+                <details class="experiments">
+                    <summary>Experiments</summary>
+                    <p><a href="/experiment.html">Secular-ly</a></p>
+                </details>
+            </section>
+
+            <section class="updates" aria-labelledby="updates-title">
+                <h2 id="updates-title">Updates</h2>
+                <article>
+                    <time datetime="2026-11-14">November 14, 2026</time>
+                    <ul>
+                        <li>Replaced the old laaarp.com site with the current Games and UGS libraries and game viewer.</li>
+                        <li>Unlocking now sends the original tab to Google while the site stays in a new about:blank tab.</li>
+                        <li>Removed a broken Google-host call from Pokémon Black 2’s launcher.</li>
+                        <li>Updated the alternate game launcher link for the renamed repository.</li>
+                        <li>Typing the correct password now unlocks the entrance automatically, without pressing Enter.</li>
+                        <li>Restored the fake 404 entrance: type the password and press Enter to open the site in an about:blank tab.</li>
+                    </ul>
+                </article>
+                <article>
+                    <time datetime="2026-11-10">November 10, 2026</time>
+                    <ul>
+                        <li>Fixed reported startup, worker, and audio errors in several games, restored Drift Boss, and reduced reports from optional ads and browser permission prompts.</li>
+                        <li>Switching tabs keeps the main site address unchanged again.</li>
+                    </ul>
+                </article>
+                <article>
+                    <time datetime="2026-11-09">November 9, 2026</time>
+                    <ul>
+                        <li>Removed the password lock. The site opens Games or your last-used game library automatically.</li>
+                        <li>Unlocking the site now opens Games by default.</li>
+                        <li>Updated games and error reporting for larp.mom.</li>
+                        <li>Incorrect passwords now show “nope”.</li>
+                        <li>Removed the 404 heading and server text from the password screen.</li>
+                        <li>The homepage now unlocks with a password on the 404 page.</li>
+                    </ul>
+                </article>
+                <article>
+                    <time datetime="2026-11-07">November 7, 2026</time>
+                    <ul>
+                        <li>Fixed more game startup failures and reduced automatic reports from optional ad and analytics scripts.</li>
+                        <li>Added Fundamental to Games.</li>
+                        <li>Added Prestige Tree to Games.</li>
+                        <li>Searches typed while the game library is loading now stay applied.</li>
+                        <li>Added Biotomata to Games with its icon, search, and recent-play history.</li>
+                        <li>Fixed Escape Road 3’s missing configuration error during loading.</li>
+                        <li>Fixed early loading errors in Bridge Race and Block Blast, removed Snowbattle’s broken wrapper scripts, and improved automatic error details and filtering.</li>
+                        <li>The entry page now opens with any regular keyboard key instead of requiring Enter.</li>
+                        <li>Added manual game problem reports and optional automatic error reports to the site owner.</li>
+                    </ul>
+                </article>
+                <details class="older-updates">
+                    <summary>Older updates</summary>
+                <article>
+                    <time datetime="2026-11-06">November 6, 2026</time>
+                    <ul>
+                        <li>Removed automatic game error banners. Error details remain available under More in diagnostics.</li>
+                    </ul>
+                </article>
+                <article>
+                    <time datetime="2026-11-02">November 2, 2026</time>
+                    <ul>
+                        <li>Fixed Moto X3M 3's empty script request and corrected the game loader's diagnostic status checks.</li>
+                        <li>The browser tab title now stays Clever while browsing and playing games.</li>
+                        <li>Removed Start playing and Tv navigation, and shortened the page introductions.</li>
+                        <li>Added game links that work with browser Back and Forward, keyboard focus handling, and loading recovery controls.</li>
+                        <li>Added recent games and featured picks to Home, explained the two catalogs, linked Tv, and collapsed older updates.</li>
+                        <li>Moved alternate launch options into More, added helpful search states, and pinned catalog sources to exact versions.</li>
+                        <li>Added a Home notice that single games have moved to the Games tab.</li>
+                        <li>Restored the original game catalog order, with the three standalone games placed as recent additions instead of pinned at the front.</li>
+                        <li>Sorted Games and UGS alphabetically, including the standalone games, and changed Isaac's icon to a simple cartoon face.</li>
+                        <li>Replaced the Antimatter Dimensions, Isaac, and Balatro library icons with actual game artwork.</li>
+                        <li>Moved Antimatter Dimensions, Isaac, and Balatro into Games with icons, search, and the shared game viewer.</li>
+                    </ul>
+                </article>
+                <article>
+                    <time datetime="2026-10-27">October 27, 2026</time>
+                    <ul>
+                        <li>Fixed Burrito Bison: Launcha Libre's blank screen by loading its Unity scripts locally.</li>
+                        <li>Removed the scrolling header text and simplified navigation.</li>
+                        <li>Added a source selector to Tv with alternate domains, anime-only sources, and source-specific ID instructions.</li>
+                        <li>Slope now loads its game files locally. Renamed the tv tab to Tv and moved its instructions below the lookup form.</li>
+                        <li>Added a tv tab with external movie search, lookup instructions, and a 0vidads movie and TV player.</li>
+                    </ul>
+                </article>
+                <article>
+                    <time datetime="2026-10-22">October 22, 2026</time>
+                    <ul>
+                        <li>Renamed the site to larp.surf and updated the scrolling notice to "r.i.p librewolf and xvpn".</li>
+                    </ul>
+                </article>
+                <article>
+                    <time datetime="2026-10-21">October 21, 2026</time>
+                    <ul>
+                        <li>Fixed Draw Joust's missing game files. Its build now loads locally with guest play and local saves.</li>
+                        <li>Fixed Buckshot Roulette's loading screen with local game files, download progress, and visible download errors.</li>
+                        <li>Restored the full-height game viewer so navigation no longer takes space from games.</li>
+                        <li>Fixed Doodle Jump's startup. Its scripts, images, stylesheet, and font now load from this site.</li>
+                        <li>The notice stays visible while games are open and no longer pauses on hover.</li>
+                        <li>The scrolling notice now appears on Home, Games, and UGS and keeps its position and pause setting when switching tabs.</li>
+                        <li>Added a scrolling notice to the Home header, with soft fades and a pause control.</li>
+                        <li>Polytrack now finishes loading even when a UI image fails to download.</li>
+                    </ul>
+                </article>
+                <article>
+                    <time datetime="2026-10-20">October 20, 2026</time>
+                    <ul>
+                        <li>Fixed Polytrack's physics worker startup. Its game files now load from this site.</li>
+                    </ul>
+                </article>
+                <article>
+                    <time datetime="2026-10-15">October 15, 2026</time>
+                    <ul>
+                        <li>Fixed the shared Flash game loader and Ruffle player by hosting their JavaScript and WebAssembly files locally.</li>
+                    </ul>
+                </article>
+                <article>
+                    <time datetime="2026-10-14">October 14, 2026</time>
+                    <ul>
+                        <li>Added Balatro under Single games, with all game files hosted on this site.</li>
+                        <li>Snow Rider now uses locally hosted build files. Added "yes i do" at the bottom of Home.</li>
+                        <li>Celeste's runtime files are now hosted with the site. Failed local assets show HTTP status details in the debug log.</li>
+                    </ul>
+                </article>
+                <article>
+                    <time datetime="2026-10-13">October 13, 2026</time>
+                    <ul>
+                        <li>Celeste now loads its pinned JavaScript and runtime assets from GitHub through local asset URLs.</li>
+                        <li>Dark mode is now the default, with a saved Light option. UGS games can open directly in a new tab.</li>
+                        <li>Removed the page modification popup and monitoring system.</li>
+                        <li>UGS now opens a searchable local catalog with the same game viewer and controls as gn-math.</li>
+                        <li>Added this Updates section to track new features and fixes.</li>
+                        <li>Added the Experiments dropdown, corrected the experiment page address, and tidied its spacing.</li>
+                        <li>Page modification alerts now start after unlocking and include whitelist and remove-element buttons.</li>
+                    </ul>
+                </article>
+                <article>
+                    <time datetime="2026-10-12">October 12, 2026</time>
+                    <ul>
+                        <li>Switched game loading, covers, and catalog refreshes to Xnogsis forks and synchronized their contents.</li>
+                    </ul>
+                </article>
+                </details>
+            </section>
+
+            <footer>
+                Built and run by xnogsis. Games belong to their authors: gn-math (gn-math / freebuisness), Moto X3M from 3kh0 lite,
+                Antimatter Dimensions by IvarK, The Browsing of Isaac by chiikabu, Balatro by LocalThunk, Buckshot Roulette by Mike Klubnika, Polytrack by Kodub, HTML5 Doodle Jump by Kushagra Agarwal and Rishabh. Balatro, Buckshot Roulette, Celeste, Doodle Jump, Draw Joust, Polytrack and Snow Rider runtime files are hosted with this site; other games are fetched from public repos through esm.sh, with jsDelivr as a backup.
+            </footer>
+        </div>
+
+        <aside>
+            <div id="garfield">
+                <a id="garfield-link" href="https://www.gocomics.com/garfield" target="_blank" rel="noopener"><img id="garfield-img" alt="Today's Garfield strip"></a>
+                <p id="garfield-caption">Loading today's Garfield...</p>
+            </div>
+
+            <div id="contact">
+                <h2>Something broken?</h2>
+                <p>Broken games, game suggestions, recommendations or other issues? Email me and I'll fix it.</p>
+                <p><a href="mailto:detacopablo@gmail.com">detacopablo@gmail.com</a></p>
+            </div>
+
+            <div class="tools">
+                <h2>Tools</h2>
+                <p><button type="button" id="forget">Forget my saved page</button><span id="forget-note"></span></p>
+                <p><button type="button" id="reset-loader">Reset game loader</button><span id="reset-note"></span></p>
+                <p class="muted">Reset if a game is stuck loading or shows an old version. Saved games are kept.</p>
+            </div>
+        </aside>
+    </main>
+
+    <p class="home-bottom">yes i do</p>
+
+    <script src="game-library.js"></script>
+    <script src="home-discovery.js"></script>
+    <script>
+        const COOKIE_MAX_AGE = 60 * 60 * 24 * 30;
+
+        const garfieldBox = document.getElementById('garfield');
+        fetch('garfield.json', { cache: 'no-cache' })
+            .then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); })
+            .then((strip) => {
+                const img = document.getElementById('garfield-img');
+                img.src = strip.image;
+                img.onerror = () => { garfieldBox.className = 'failed'; garfieldBox.textContent = 'Garfield for ' + strip.date + ' would not load. GoComics is probably blocked here.'; };
+                document.getElementById('garfield-link').href = strip.url;
+                document.getElementById('garfield-caption').textContent = 'Garfield for ' + strip.date + '. Updates once a day.';
+            })
+            .catch(() => {
+                garfieldBox.className = 'failed';
+                garfieldBox.textContent = 'No Garfield today. The daily fetch did not run, or garfield.json is missing.';
+            });
+
+        document.querySelectorAll('a.page-link').forEach((link) => {
+            link.addEventListener('click', () => {
+                document.cookie = "access_granted=" + link.getAttribute('href') + "; max-age=" + COOKIE_MAX_AGE + "; path=/";
+            });
+        });
+
+        document.getElementById('reset-loader').addEventListener('click', async () => {
+            const note = document.getElementById('reset-note');
+            note.textContent = "Resetting...";
+            try {
+                if ('serviceWorker' in navigator) {
+                    for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+                }
+                if ('caches' in window) {
+                    for (const k of await caches.keys()) await caches.delete(k);
+                }
+                note.textContent = "Done. Games will load fresh.";
+            } catch (e) {
+                note.textContent = "Could not reset: " + e.message;
+            }
+        });
+
+        const themeBtn = document.getElementById('theme');
+        const paintTheme = () => { themeBtn.textContent = document.documentElement.classList.contains('dark') ? 'Light' : 'Dark'; };
+        themeBtn.addEventListener('click', () => {
+            const dark = document.documentElement.classList.toggle('dark');
+            localStorage.theme = dark ? 'dark' : 'light';
+            paintTheme();
+        });
+        paintTheme();
+
+        document.getElementById('forget').addEventListener('click', () => {
+            document.cookie = "access_granted=; max-age=0; path=/";
+            document.getElementById('forget-note').textContent = "Saved page cleared. The next visit will open Games.";
+        });
+    </script>
+</body>
+</html>

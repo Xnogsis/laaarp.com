@@ -27,17 +27,156 @@ jobs:
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
+    # Keep the browser/dependency platform fixed as ubuntu-latest rolls forward.
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # Always the branch tip: a manual dispatch fired right after the Garfield bot's
+          # push resolved to the commit before it and deployed stale content.
+          ref: main
+      - name: Set up Python for browser checks
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install browser checks
+        run: |
+          python -m pip install pillow==11.3.0 playwright==1.56.0
+          python -m playwright install --with-deps chromium
+      - name: Check catalog and viewer before publishing
+        env:
+          ENTRY_PASSWORD: ${{ secrets.ENTRY_PASSWORD }}
+        run: |
+          node --check gnmath.js
+          node --check game-viewer.js
+          node --check game-library.js
+          node --check game-diagnostics.js
+          node --check game-reporting.js
+          node --check game-reporting-config.js
+          node --check home-discovery.js
+          node --check sw.js
+          node --test tests/loader-fixes.cjs tests/entry-payload.cjs
+          python .github/scripts/source_pins.py --get Xnogsis/html
+          python tests/catalogs.py
+          python tests/viewer.py
+          python tests/reporting.py
+          python tests/balatro.py
+          python tests/ruffle.py
+          python tests/tv.py
+          python tests/entry.py
       - name: Setup Pages
         uses: actions/configure-pages@v5
+      - name: Cache Celeste assets
+        uses: actions/cache@v4
+        with:
+          path: celeste-assets/4f043a5ce121b74dc54ce56d74f213a2eeea6b4e
+          key: celeste-assets-4f043a5ce121b74dc54ce56d74f213a2eeea6b4e-gzip-v2
+      - name: Prepare Celeste assets
+        run: bash .github/scripts/prepare-celeste.sh
+      - name: Cache Snow Rider assets
+        uses: actions/cache@v4
+        with:
+          path: snow-rider-assets/6b7c2b9167b592528b221428414e63f06c4640b9
+          key: snow-rider-assets-6b7c2b9167b592528b221428414e63f06c4640b9-v1
+      - name: Prepare Snow Rider assets
+        run: bash .github/scripts/prepare-snow-rider.sh
+      - name: Cache Buckshot Roulette assets
+        uses: actions/cache@v4
+        with:
+          path: buckshot-assets/b3042ae7a56b2ede39ea4b4371b1d0ab3af8828a
+          key: buckshot-assets-b3042ae7a56b2ede39ea4b4371b1d0ab3af8828a-gzip-v1
+      - name: Prepare Buckshot Roulette assets
+        run: python3 .github/scripts/prepare-buckshot.py
+      - name: Check published site size
+        run: |
+          site_bytes=$(du -sb --exclude=.git . | cut -f1)
+          echo "Published site: $site_bytes bytes"
+          test "$site_bytes" -le 1000000000
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:
+          # A rerun must not conflict with an earlier attempt’s artifact.
+          name: github-pages-${{ github.run_attempt }}
           # Upload entire repository
           path: '.'
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
+      - name: Verify published Celeste assets
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          asset_base="${PAGES_URL%/}/celeste-assets/4f043a5ce121b74dc54ce56d74f213a2eeea6b4e"
+          for asset in styles.css assets/mountain.png cfg.js data.js bundle.js _framework/dotnet.js _framework/FNA.wasm.gz _framework/data/data.data.part1.gz; do
+            curl --head --location --fail --silent --show-error --retry 6 --retry-delay 5 --retry-all-errors "$asset_base/$asset" >/dev/null
+          done
+      - name: Verify published Snow Rider assets
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          asset_base="${PAGES_URL%/}/snow-rider-assets/6b7c2b9167b592528b221428414e63f06c4640b9"
+          for asset in index.html TemplateData/style.css TemplateData/UnityProgress.js Build/UnityLoader.js Build/SnowRider3D-gd-1.json Build/SnowRider3D-gd-1.data.unityweb Build/SnowRider3D-gd-1.wasm.code.unityweb Build/SnowRider3D-gd-1.wasm.framework.unityweb.js; do
+            curl --head --location --fail --silent --show-error --retry 6 --retry-delay 5 --retry-all-errors "$asset_base/$asset" >/dev/null
+          done
+      - name: Verify published Balatro assets
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          for asset in index.html consolewrapper.js game.js game.data love.js love.wasm theme/love.css; do
+            curl --head --location --fail --silent --show-error --connect-timeout 10 --max-time 60 --retry 6 --retry-delay 5 --retry-all-errors "${PAGES_URL%/}/balatro/$asset" >/dev/null
+          done
+      - name: Verify published Ruffle assets
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          git ls-files ruffle | while IFS= read -r asset; do
+            curl --head --location --fail --silent --show-error --connect-timeout 10 --max-time 60 --retry 6 --retry-delay 5 --retry-all-errors "${PAGES_URL%/}/$asset" >/dev/null
+          done
+      - name: Verify published Polytrack assets
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          for asset in index.html main.bundle.js simulation_worker.bundle.js lib/ammo.wasm.js lib/ammo.wasm.wasm lib/draco/draco_wasm_wrapper.js lib/draco/draco_decoder.wasm tracks/official/summer1.track; do
+            curl --head --location --fail --silent --show-error --connect-timeout 10 --max-time 60 --retry 6 --retry-delay 5 --retry-all-errors "${PAGES_URL%/}/polytrack/$asset" >/dev/null
+          done
+      - name: Verify published Doodle Jump assets
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          for asset in index.html main.js style.css assets/2WEhF.png assets/5BBsR.png assets/Y0BMP.png assets/font.css assets/LYjYdHv3kUk9BMV96EIswT9DIbW-MIS11zM.woff2; do
+            curl --head --location --fail --silent --show-error --connect-timeout 10 --max-time 60 --retry 6 --retry-delay 5 --retry-all-errors "${PAGES_URL%/}/doodle-jump/$asset" >/dev/null
+          done
+      - name: Verify published Slope assets
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          for asset in index.html slope.js Build/UnityLoader.js Build/WEB1.2.1.data.unityweb.part1 Build/WEB1.2.1.data.unityweb.part2 Build/WEB1.2.1.wasm.code.unityweb Build/WEB1.2.1.wasm.framework.unityweb; do
+            curl --head --location --fail --silent --show-error --connect-timeout 10 --max-time 60 --retry 6 --retry-delay 5 --retry-all-errors "${PAGES_URL%/}/slope/$asset" >/dev/null
+          done
+      - name: Verify published Burrito Bison loader
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          for asset in UnityProgress.js burrito-bison-ll.js burrito-bison-ll.json kongregate_api.js style.css images/progressLogo.Dark.png; do
+            curl --head --location --fail --silent --show-error --connect-timeout 10 --max-time 60 --retry 6 --retry-delay 5 --retry-all-errors "${PAGES_URL%/}/burrito-bison/$asset" >/dev/null
+          done
+      - name: Verify published Buckshot Roulette assets
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          for asset in index.html buckshot-roulette.js style.css buckshot-roulette.png buckshot-roulette.audio.worklet.js buckshot-roulette.audio.position.worklet.js; do
+            curl --head --location --fail --silent --show-error --connect-timeout 10 --max-time 60 --retry 6 --retry-delay 5 --retry-all-errors "${PAGES_URL%/}/buckshot-roulette/$asset" >/dev/null
+          done
+          for asset in buckshot-roulette.pck.gz buckshot-roulette.wasm.gz; do
+            curl --head --location --fail --silent --show-error --connect-timeout 10 --max-time 60 --retry 6 --retry-delay 5 --retry-all-errors "${PAGES_URL%/}/buckshot-assets/b3042ae7a56b2ede39ea4b4371b1d0ab3af8828a/$asset" >/dev/null
+          done
+      - name: Verify published Draw Joust assets
+        env:
+          PAGES_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          for asset in index.html platform.js logo.png background.jpg TemplateData/style.css Build/DrawJoustAB.loader.js Build/DrawJoustAB.framework.js.unityweb Build/DrawJoustAB.wasm.unityweb Build/DrawJoustAB.data.unityweb; do
+            curl --head --location --fail --silent --show-error --connect-timeout 10 --max-time 60 --retry 6 --retry-delay 5 --retry-all-errors "${PAGES_URL%/}/draw-joust/$asset" >/dev/null
+          done

@@ -1,0 +1,538 @@
+// Serves /hub/gnmath/... and /hub/ugs/... from our GitHub forks via esm.sh (or jsDelivr),
+// so the whole static game site runs under this origin with proper MIME types.
+// REPOS lists equivalent copies (upstream + forks), tried in order.
+//
+// Trust boundary: every repo listed here ships HTML and JS that runs as first-party
+// code on this origin (same cookies, storage, caches). Only add repos whose owners
+// are trusted; a malicious commit upstream is a malicious commit here. HUB_CSP below
+// narrows what such a page can do, but cannot isolate it from the origin.
+const REPOS = ["Xnogsis/html"];
+importScripts("/game-source-pins.js");
+const RUFFLE_PATH = "/ruffle/0.2.0-nightly.2025.10.2/";
+const RUFFLE_CDN_RE = /^https:\/\/(?:(?:cdn|gcore|fastly|testingcf)\.jsdelivr\.net\/npm\/|esm\.sh\/)@ruffle-rs\/ruffle@0\.2\.0-nightly\.2025\.10\.2\/([\w.-]+)(?:[?#]|$)/;
+const BURRITO_COMMIT = "9cf433220236bb0471ab3a68ec8fe3e0a2799e36";
+const BURRITO_LOADER_RE = /^https:\/\/(?:(?:cdn|gcore|fastly|testingcf)\.jsdelivr\.net|esm\.sh)\/gh\/bubbls\/UGS-Assets@[^/]+\/BurritoBison-main\/(UnityProgress\.js|burrito-bison-ll\.(?:js|json)|kongregate_api\.js|style\.css)(?:[?#]|$)/;
+
+// Games whose gn-math page is broken, replaced by a self-contained copy: the page
+// redirects to the copy's index.html, and the copy's folder is fetched only from its
+// repo (asking the others first costs a slow esm.sh 404 per file). Keyed by catalog id,
+// since the daily catalog refresh can move a game to "<id>-fix.html".
+const COPIES = {
+    "276": { repo: "Xnogsis/ugs-singlefile", dir: "UGS-Files/", page: "cldriftboss.html" },
+    // Standalone repositories can mount at a hub folder without an upstream catalog id.
+    "prestige-tree": { repo: "Xnogsis/Prestige-Tree", dir: "prestige-tree/", stripDir: true },
+    "biotomata": { repo: "Xnogsis/Biotomata-Game", dir: "biotomata/", stripDir: true },
+    // gn-math's Moto X3M pulls from repos that are gone; this copy has all 50 levels.
+    "96": { repo: "Xnogsis/html55-new", dir: "embeds/moto_x3m/" },
+    // gn-math's old Eaglercraft versions are "this version is broken" stubs; UGS has offline single-file builds.
+    "298": { repo: "Xnogsis/ugs-singlefile", dir: "UGS-Files/", page: "clEaglercraft-Alpha-126-Offline.html" },
+    "299": { repo: "Xnogsis/ugs-singlefile", dir: "UGS-Files/", page: "clEaglercraft-Beta-1.3-Offline.html" },
+    "301": { repo: "Xnogsis/ugs-singlefile", dir: "UGS-Files/", page: "clEaglercraft-Indev-Offline.html" },
+};
+
+// Per-game rewrites of hub HTML pages: [text that identifies the game's page, rewrite].
+const HTML_FIXES = [
+    // The Google gadget relay is absent here; the standalone game does not need it.
+    ["bossgame.js", body => body.replace(/<script\b[^>]*>([\s\S]*?)<\/script>/gi,
+        (script, code) => code.includes('gadgets.rpc.setRelayUrl') ? '' : script)],
+    // The game's one-line export accidentally comments out the end of this handler.
+    ["G-MENBM6GSNY", body => body.replace('// space and arrow keys ', '/* space and arrow keys */ ')],
+    ["google-class/coreball/", body => body.replace('window.parent.maeExportApis_();', '')],
+    // This exported NDS launcher retains a Google-host bridge that is absent here.
+    ["Pokemon%20-%20Black%20Version%202", body => body.replace('window.parent.maeExportApis_();', '')
+        .replace('<script src="//www.google.com/jsapi"></script>', '')],
+    // There is no game state to save before Unity has finished starting.
+    ["ColorMatch.data.unityweb", deferUnityMessages],
+    ["yrgen73/draw-cl", body => body.replace('onload="sdk.showBanner();"', '')],
+    // TileTopia must not unregister the hub worker or delete other games' caches.
+    ["youtube-playables@main/tiletopia/", body => body.replace(
+        /<script\b[^>]*>([\s\S]*?)<\/script>/gi,
+        (script, code) => code.includes('navigator.serviceWorker.getRegistration("../..")') ? '' : script
+    ).replace('navigator.serviceWorker.register("ServiceWorker.js");', '')],
+    ["genizy/cc3d-mobile", body => body.replace('"serviceWorker":"CrazyCattle3D.service.worker.js"', '"serviceWorker":""')],
+    ["games/evowars/", body => body.replace(/<head[^>]*>/i, tag => tag + cdnWorkerBridge())],
+    ["LAMAR@main/protektor/", body => body.replace(/<head[^>]*>/i, tag => tag + cdnWorkerBridge())],
+    // The mod attaches canvas listeners before the canvas exists.
+    ["Replku/Ovo@", body => body.replace('src="unlockalllevels.js"', 'defer src="unlockalllevels.js"')],
+    // This host bridge only calls a Google-host function; local assets need the game's root as base.
+    ["435345345346@", body => body.replace(
+        /<script\b[^>]*src="(https:\/\/cdn\.jsdelivr\.net\/gh\/234sd4w5w45wers5tr-645758574456456\/435345345346@[^/]+\/)js\/window\.js"[^>]*>\s*<\/script>/,
+        '<base href="$1">'
+    )],
+    // These base URLs are blocked by the hub CSP; use the supported GitHub CDN path.
+    ["rawcdn.githack.com/", body => body.replace(
+        /https:\/\/rawcdn\.githack\.com\/([^/]+)\/([^/]+)\/([^/]+)\//g, "https://cdn.jsdelivr.net/gh/$1/$2@$3/"
+    )],
+    ["monster-tracks/webapp/source_min.js", body => body.replace(
+        '<div id="canvas_border">', '<div id="gradient" aria-hidden="true" style="display:none"></div><div id="canvas_border">'
+    )],
+    // Godot's no-argument lookup resolves against the CDN base instead of this document.
+    ["const GODOT_CONFIG =", body => body.replace(
+        'const GODOT_CONFIG =',
+        'const getRegistration = navigator.serviceWorker?.getRegistration.bind(navigator.serviceWorker); if(getRegistration) navigator.serviceWorker.getRegistration = (url = location.href) => getRegistration(url); const GODOT_CONFIG ='
+    )],
+    // The bare Vue package resolves to an ES module on the mirror; this game needs the classic build.
+    ["js/technical/layerSupport.js", body => body.replace(
+        'src="https://cdn.jsdelivr.net/npm/vue@2.6.12"', 'src="https://cdn.jsdelivr.net/npm/vue@2.6.12/dist/vue.min.js"'
+    )],
+    // Escape Road 3's framework reads a global config, but its page declares it
+    // inside an async loader. Expose the same populated object before loading Unity.
+    ["bubblfan/escape-road-3@", body => body.replace(
+        /\bvar config\s*=\s*\{/, "var config = window.config = {"
+    )],
+    // These ports retain their original host's ad wrappers, which 404 at the CDN root.
+    ["wnasmile/LAMAR@main/", body => body.replace(
+        /<script\b[^>]*\ssrc=["']\/js\/(?:main|lib)\.js["'][^>]*>\s*<\/script\s*>/gi, ""
+    )],
+    // A game cannot register an offline-cache worker from another origin. The hub
+    // already has its own worker; keep Block Blast's actual Unity setup intact.
+    ["bubblfan/bl/ServiceWorker.js", body => body.replace(
+        /window\.addEventListener\("load", function \(\) \{\s*if \("serviceWorker" in navigator\) \{\s*navigator\.serviceWorker\.register\(\s*"https:\/\/cdn\.jsdelivr\.net\/gh\/bubblfan\/bl\/ServiceWorker\.js",?\s*\);\s*\}\s*\}\);/, ""
+    )],
+    // Bridge Race's save-data promise resolves before createUnityInstance does.
+    // Replay its early SendMessage calls once Unity has returned the real instance.
+    ["bridge-race-save", deferUnityMessages],
+    // Let Moto X3M 3's pinned, CORS-enabled scripts report useful error details.
+    ["58d9d25357dc8597da2691dc003f35c4ca25ac65/moto3.js", (body) => body.replaceAll(
+        '<script type="text/javascript" src="https://cdn.jsdelivr.net/gh/bubbls/ruffle@58d9d25357dc8597da2691dc003f35c4ca25ac65/',
+        '<script crossorigin="anonymous" type="text/javascript" src="https://cdn.jsdelivr.net/gh/bubbls/ruffle@58d9d25357dc8597da2691dc003f35c4ca25ac65/'
+    )],
+    ["bubbls/UGS-Assets@main/BurritoBison-main/", (body) => body.replaceAll(
+        "bubbls/UGS-Assets@main/BurritoBison-main/",
+        "bubbls/UGS-Assets@" + BURRITO_COMMIT + "/BurritoBison-main/"
+    )],
+    ["@ruffle-rs/ruffle@0.2.0-nightly.2025.10.2/", (body) => body.replace(
+        /https:\/\/(?:cdn|gcore|fastly|testingcf)\.jsdelivr\.net\/npm\/@ruffle-rs\/ruffle@0\.2\.0-nightly\.2025\.10\.2\//g,
+        self.location.origin + RUFFLE_PATH
+    ).replace(/ruffle\.min\.js/g, "ruffle.js")],
+    // Keep Celeste's module imports and runtime files on one GitHub-backed asset path.
+    ["cdn.jsdelivr.net/gh/web-ports/celeste@", (body) => body.replace(
+        /https:\/\/cdn\.jsdelivr\.net\/gh\/web-ports\/celeste@([a-f0-9]{40})\//g,
+        self.location.origin + "/celeste-assets/$1/"
+    )],
+    // Draw Climber's egret build draws nothing on some WebGL/ANGLE drivers (black canvas,
+    // no errors). Its 2D canvas renderer paints correctly.
+    ["yrgen73/draw-cl", (body) => body.replace(/renderMode:\s*"webgl"/g, 'renderMode: "canvas"')],
+    // Minecraft 1.8.8's <base> is missing jsDelivr's "gh/", so every file 404s.
+    ["cdn.jsdelivr.net/Theprocat27/", (body) => body.replace("cdn.jsdelivr.net/Theprocat27/", "cdn.jsdelivr.net/gh/Theprocat27/")],
+];
+
+function deferUnityMessages(body) {
+    return body.replace('var unityGameInstance = null;',
+        'var pendingUnityMessages = []; var unityGameInstance = {SendMessage: (...args) => pendingUnityMessages.push(args)};'
+    ).replace('unityGameInstance = unityInstance;',
+        'unityGameInstance = unityInstance; for (const args of pendingUnityMessages.splice(0)) unityInstance.SendMessage(...args);');
+}
+
+// A few catalog entries point at renamed files ("7-f.html"); gn-math still has "<id>.html".
+const RENAMED_RE = /^(\d+)\D[^/]*\.html$/;
+
+// Any GitHub (/gh/) or npm (/npm/) file on a jsDelivr edge. esm.sh serves GitHub files
+// under /gh/ with the same "repo@ref/path" layout and npm files at the root as
+// "pkg@ver/path". "?raw" stops esm.sh from turning .js files into ES modules.
+// Some school filters' proxy scripts choke on a raw ' in a URL, so it goes out as %27.
+const JSDELIVR_RE = /^https:\/\/(?:cdn|gcore|fastly|testingcf)\.jsdelivr\.net\/(gh|npm)\/([^?#]+)(\?[^#]*)?/;
+function viaEsm(href) {
+    const m = JSDELIVR_RE.exec(href);
+    if (!m) return href;
+    // esm.sh has no "@latest" for GitHub repos; leaving the ref out means the default branch.
+    const path = m[1] === "gh" ? "gh/" + m[2].replace(/^([^/]+\/[^/@]+)@latest\//, "$1/") : m[2];
+    return ("https://esm.sh/" + path + (m[3] ? m[3] + "&raw" : "?raw")).replace(/'/g, "%27");
+}
+
+// Public GitHub files remain available when a CDN rejects a large repository.
+function viaRaw(href) {
+    const match = JSDELIVR_RE.exec(href);
+    if (!match || match[1] !== "gh") return null;
+    const file = /^([^/]+)\/([^/@]+)(?:@([^/]+))?\/(.+)$/.exec(match[2]);
+    return file ? `https://raw.githubusercontent.com/${file[1]}/${file[2]}/${!file[3] || file[3] === "latest" ? "HEAD" : file[3]}/${file[4]}` : null;
+}
+
+// Construct's classic workers need a same-origin entry and absolute import paths.
+function cdnWorkerBridge() {
+    function install(JSDELIVR_RE, viaEsm) {
+        const NativeWorker = window.Worker;
+        window.Worker = class extends NativeWorker {
+            constructor(path, options) {
+                const url = new URL(path, document.baseURI);
+                if (url.origin !== location.origin && JSDELIVR_RE.test(url.href)) {
+                    const source = `const JSDELIVR_RE=${JSDELIVR_RE};const viaEsm=${viaEsm};const load=importScripts.bind(self);self.importScripts=(...paths)=>load(...paths.map(path=>viaEsm(new URL(path,${JSON.stringify(url.href)}).href)));importScripts(${JSON.stringify(url.href)});`;
+                    path = URL.createObjectURL(new Blob([source], {type:'text/javascript'}));
+                }
+                super(path, options);
+            }
+        };
+    }
+    return '<script>(' + install + ')(' + JSDELIVR_RE + ',' + viaEsm + ')</script>';
+}
+
+// bubbls/youtube-playables' ytgame.js is the real YouTube Playables SDK, which
+// waits on a YouTube host that never exists here: getLanguage() pends forever,
+// so game wrappers stall on a black screen before loading their scripts. Its
+// tail also fetches location.orgin+"/pages/home.html" (typo for origin), which
+// resolves to <game>/undefined/pages/home.html and 404s. The stub mirrors the
+// real SDK's offline behavior (loadData resolves "", isAudioEnabled is sync,
+// getLanguage falls back to "en"); unlisted members resolve to a no-op that
+// returns a resolved promise so callers can invoke them unconditionally.
+const YTGAME_RE = /^https:\/\/[^/]+\.jsdelivr\.net\/gh\/bubbls\/youtube-playables@[^/]+\/ytgame\.js(?:[?#]|$)/;
+const YTGAME_STUB = `'use strict';
+window.ytgame = (() => {
+    const res = (v) => Promise.resolve(v);
+    const noop = () => {};
+    const wrap = (o) => new Proxy(o, { get(t, k) {
+        if (k in t) return t[k];
+        if (typeof k === "symbol" || k === "then" || k === "catch" || k === "finally") return undefined;
+        return (t[k] = wrap(function () { return res(undefined); }));
+    } });
+    return wrap({
+        SDK_VERSION: "stub",
+        IN_PLAYABLES_ENV: false,
+        SdkError: class extends Error {},
+        SdkErrorType: {},
+        system: wrap({
+            getLanguage: () => res((navigator.language || "en").split("-")[0]),
+            isAudioEnabled: () => true,
+            onAudioEnabledChange: noop,
+        }),
+        game: wrap({
+            firstFrameReady: noop,
+            gameReady: noop,
+            loadData: () => res(""),
+            saveData: () => res(),
+        }),
+        health: wrap({ logError: noop, logWarning: noop }),
+        engagement: wrap({ sendScore: () => res(), openYTContent: noop, share: () => res() }),
+        ads: wrap({}),
+    });
+})();`;
+
+// Some Construct 3 games (Basket Random, Boxing Random, ...) load their engine from a
+// Weebly upload in which every requestAnimationFrame was renamed cancelAnimationFrame,
+// so the runtime draws its first frame and never ticks again: the game sits on its
+// PLAY screen everywhere, ads or not. Real cancel calls are statements; a call whose
+// result is stored ("x = " / "set(k, ") can only have been a request, so those get
+// their name back.
+const BROKEN_C3_RE = /^https:\/\/[^/]+\.preview\.editmysite\.com\/.+\/c3runtime\.js$/;
+const BROKEN_C3_RAF_RE = /([=,](?:self\.)?)cancelAnimationFrame\(/g;
+async function fixedC3Runtime(request) {
+    const res = await fetch(request.url, { mode: "cors" });
+    if (!res.ok) return res;
+    const body = (await res.text()).replace(BROKEN_C3_RAF_RE, "$1requestAnimationFrame(");
+    return new Response(body, { headers: { "Content-Type": "text/javascript", "Cache-Control": "public, max-age=86400" } });
+}
+
+// Cross-origin files that games request and that need replacing: [URL pattern, handler].
+const CROSS_ORIGIN_FIXES = [
+    // Paper.io's mirrored ad SDK is truncated; its no-ad lifecycle still lets the game start.
+    [/^https:\/\/(?:[^/]+\.jsdelivr\.net|esm\.sh)\/gh\/234sd4w5w45wers5tr-645758574456456\/435345345346@[^/]+\/js\/sdk\.js(?:[?#]|$)/, () => new Response(`
+        const emit = name => window.SDK_OPTIONS?.onEvent?.({name});
+        window.sdk = {showBanner: () => {emit('SDK_GAME_PAUSE'); setTimeout(() => emit('SDK_GAME_START'), 0);}};
+        setTimeout(() => emit('SDK_READY'), 0);
+    `, {headers:{"Content-Type":"text/javascript", "Access-Control-Allow-Origin":"*"}})],
+    // Opaque CDN script failures cannot trigger the generic mirror fallback.
+    [BURRITO_LOADER_RE, (req) => fetch(self.location.origin + "/burrito-bison/" + BURRITO_LOADER_RE.exec(req.url)[1])],
+    // Encrypted upstream loaders still construct CDN URLs at runtime.
+    [RUFFLE_CDN_RE, (req) => {
+        const file = RUFFLE_CDN_RE.exec(req.url)[1].replace(/^ruffle\.min\.js$/, "ruffle.js");
+        return fetch(self.location.origin + RUFFLE_PATH + file, { cache: "force-cache" });
+    }],
+    [BROKEN_C3_RE, (req) => fixedC3Runtime(req).catch(() => fetch(req))],
+    [YTGAME_RE, () => new Response(YTGAME_STUB, {
+        headers: { "Content-Type": "text/javascript", "Cache-Control": "public, max-age=86400" },
+    })],
+];
+
+// Every hub file comes from esm.sh first (the one host that gets through filters that
+// block jsDelivr), then from jsDelivr.
+const SOURCES = [
+    (r, b, p) => viaEsm(`https://cdn.jsdelivr.net/gh/${r}@${b}/${p}`),
+    (r, b, p) => `https://cdn.jsdelivr.net/gh/${r}@${b}/${p}`,
+    (r, b, p) => `https://raw.githubusercontent.com/${r}/${b}/${p}`,
+];
+
+const MIME = {
+    html: "text/html", htm: "text/html", js: "text/javascript", mjs: "text/javascript",
+    css: "text/css", json: "application/json", wasm: "application/wasm", svg: "image/svg+xml",
+    png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg", gif: "image/gif", webp: "image/webp",
+    ico: "image/x-icon", mp3: "audio/mpeg", ogg: "audio/ogg", wav: "audio/wav", mp4: "video/mp4",
+    webm: "video/webm", woff: "font/woff", woff2: "font/woff2", ttf: "font/ttf", otf: "font/otf",
+    txt: "text/plain", xml: "text/xml", pdf: "application/pdf", swf: "application/x-shockwave-flash",
+    data: "application/octet-stream", unityweb: "application/octet-stream", bin: "application/octet-stream",
+};
+
+const HUB_RE = /^\/hub\/(gnmath|ugs)(?:\/|$)(.*)$/;
+
+self.addEventListener("install", () => self.skipWaiting());
+self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+
+function hubPath(pathname) {
+    const m = HUB_RE.exec(pathname);
+    if (!m) return null;
+    const path = m[2];
+    return { hub: m[1], path: path === "" || path.endsWith("/") ? path + "index.html" : path };
+}
+
+// Root-relative requests ("/js/main.js") coming from a hub page belong to the hub.
+async function fromHubPage(event) {
+    const referrer = event.request.referrer && HUB_RE.exec(new URL(event.request.referrer).pathname);
+    if (referrer) return referrer[1];
+    // Looking up resultingClientId during a navigation deadlocks; only subresources get here.
+    if (event.request.mode !== "navigate" && event.clientId) {
+        const client = await self.clients.get(event.clientId);
+        const match = client && HUB_RE.exec(new URL(client.url).pathname);
+        return match ? match[1] : null;
+    }
+    return false;
+}
+
+function mimeFor(path) {
+    const ext = path.split("?")[0].split(".").pop().toLowerCase();
+    return MIME[ext] || null;
+}
+
+async function hostedGameAsset(directory, commit, path) {
+    const compressed = (directory === "buckshot-assets" && /\.(?:pck|wasm)$/.test(path)) || (directory === "celeste-assets" && /(?:\.wasm$|\/data\.data\.part\d+$)/.test(path));
+    const res = await fetch(self.location.origin + "/" + directory + "/" + commit + "/" + path + (compressed ? ".gz" : ""), { cache: "force-cache" });
+    let body = res.ok && compressed ? res.body.pipeThrough(new DecompressionStream("gzip")) : res.body;
+    if (res.ok && mimeFor(path) === "text/html") {
+        body = (await res.text()).replace(/<head[^>]*>/i, (tag) => tag
+            + '<script>try{parent.lgDebug&&parent.lgDebug(window)}catch(e){}</script>' + ALLOW_SLOW_WEBGL);
+    }
+    return new Response(body, {
+        status: res.status,
+        headers: {
+            "Content-Type": mimeFor(path) || res.headers.get("content-type") || "application/octet-stream",
+            "Cache-Control": res.ok ? "public, max-age=86400" : "no-store",
+        },
+    });
+}
+
+// Hub pages are only meant to live inside this site's iframe; opened as the top
+// window they would show the hub path in the address bar, so bounce to the 404
+// page (the saved cookie reopens the hub properly from there).
+const UNFRAME_QUERY = "?unframed";
+// It also hands the page's window to the catalog's debug panel (gnmath.js lgDebug), if the parent has one.
+const STAY_FRAMED = '<script>if(top===self)location.replace("/' + UNFRAME_QUERY + '");try{parent.lgDebug&&parent.lgDebug(window)}catch(e){}</script>';
+// Synchronous XHRs bypass the service worker, so hub pages reroute those in the page.
+const ESM_SYNC_XHR = `<script>(()=>{const JSDELIVR_RE=${JSDELIVR_RE};const viaEsm=${viaEsm};const open=XMLHttpRequest.prototype.open;XMLHttpRequest.prototype.open=function(m,u,a=true,...r){if(a===false)u=viaEsm(new URL(u,document.baseURI).href);return open.call(this,m,u,a,...r)}})()</script>`;
+
+// Some engines (e.g. Bowmasters' PixiJS) ask for failIfMajorPerformanceCaveat, so on
+// software-rendered GPUs (Microsoft Basic Render Driver) they get no WebGL and draw nothing.
+const ALLOW_SLOW_WEBGL = `<script>(()=>{const g=HTMLCanvasElement.prototype.getContext;HTMLCanvasElement.prototype.getContext=function(t,o){if(o&&o.failIfMajorPerformanceCaveat)o={...o,failIfMajorPerformanceCaveat:false};return g.call(this,t,o)}})()</script>`;
+
+// Sent with every hub HTML page. Hub games need inline scripts, eval and CDN assets,
+// so script/connect sources stay open; this pins down the rest: pages can only be
+// framed by this site, can only retarget relative URLs with <base> at the CDNs the
+// games are served from anyway (gn-math pages do this for games hosted in other
+// repos), cannot pull workers or service workers from other origins, and cannot mix
+// in plain http.
+const HUB_CSP = "frame-ancestors 'self'; base-uri 'self' https://*.jsdelivr.net https://esm.sh; worker-src 'self' blob:; upgrade-insecure-requests";
+
+// Give up on a source that has not answered with headers after this long.
+const SOURCE_TIMEOUT_MS = 8000;
+
+function fetchWithTimeout(url, init) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), SOURCE_TIMEOUT_MS);
+    return fetch(url, { ...init, referrerPolicy: "no-referrer", signal: ctl.signal }).finally(() => clearTimeout(timer));
+}
+
+// First ok response for path across repos and SOURCES; logs every attempt in tried.
+async function firstOk(repos, path, tried, options = {}) {
+    for (const repo of repos) {
+        const ref = GAME_SOURCE_PINS[repo];
+        if (!ref) throw new Error("Unpinned game source: " + repo);
+        const sources = options.source === "jsdelivr" ? [SOURCES[1], SOURCES[0], ...SOURCES.slice(2)] : SOURCES;
+        for (const build of sources) {
+            const url = build(repo, ref, path);
+            const res = await fetchWithTimeout(url, {
+                method: options.head ? "HEAD" : "GET",
+                cache: options.head ? "no-store" : options.retry ? "reload" : "force-cache",
+            }).catch((e) => e);
+            tried.push([res.status || res.name, url]);
+            if (res.ok) return res;
+        }
+    }
+    return null;
+}
+
+async function fromMirrors(path, hub = "gnmath", options = {}) {
+    if (hub === "gnmath" && /^198(?:\D[^/]*)?\.html$/.test(path)) {
+        return Response.redirect(self.location.origin + "/slope/index.html", 302);
+    }
+    if (hub === "gnmath" && /^387(?:\D[^/]*)?\.html$/.test(path)) {
+        return Response.redirect(self.location.origin + "/draw-joust/index.html", 302);
+    }
+    if (hub === "gnmath" && /^205(?:\D[^/]*)?\.html$/.test(path)) {
+        return Response.redirect(self.location.origin + "/buckshot-roulette/index.html", 302);
+    }
+    if (hub === "gnmath" && /^470(?:\D[^/]*)?\.html$/.test(path)) {
+        return Response.redirect(self.location.origin + "/doodle-jump/index.html", 302);
+    }
+    if (hub === "gnmath" && /^123(?:\D[^/]*)?\.html$/.test(path)) {
+        return Response.redirect(self.location.origin + "/polytrack/index.html", 302);
+    }
+    if (hub === "gnmath" && /^113(?:\D[^/]*)?\.html$/.test(path)) {
+        return Response.redirect(self.location.origin + "/ruffle/standalone-113/index.html", 302);
+    }
+    if (hub === "gnmath" && /^119(?:\D[^/]*)?\.html$/.test(path)) {
+        return Response.redirect(self.location.origin + "/snow-rider-assets/6b7c2b9167b592528b221428414e63f06c4640b9/index.html", 302);
+    }
+    const HUB = "/hub/" + hub + "/";
+    const whole = hub === "gnmath" && COPIES[(/^(\d+)(?:\D[^/]*)?\.html$/.exec(path) || [])[1]];
+    if (whole) return Response.redirect(HUB + whole.dir + (whole.page || "index.html"), 302);
+    const copy = hub === "gnmath" && Object.values(COPIES).find((c) => path.startsWith(c.dir));
+    const repos = hub === "ugs" ? ["Xnogsis/ugs-singlefile"] : copy ? [copy.repo] : REPOS;
+    const tried = [];
+    const missing = () => tried.some(([status]) => status === 404);
+    const sourcePath = copy?.stripDir ? path.slice(copy.dir.length) : path;
+    let res = await firstOk(repos, sourcePath, tried, options);
+    const renamed = RENAMED_RE.exec(path);
+    if (!res && renamed && missing()) res = await firstOk(repos, renamed[1] + ".html", tried, options);
+    if (!res) {
+        // Listed so a user without devtools can paste which source answered what (AbortError = cut off or timed out).
+        return new Response(options.head ? null : "Not found: " + path + "\n\n" + tried.map((t) => t.join(" ")).join("\n"),
+            { status: missing() ? 404 : 502, headers: { "Content-Type": "text/plain" } });
+    }
+    const headers = new Headers();
+    const mime = mimeFor(path) || res.headers.get("content-type") || "application/octet-stream";
+    headers.set("Content-Type", mime);
+    headers.set("Cache-Control", "public, max-age=86400");
+    if (mime === "text/html") {
+        headers.set("Content-Security-Policy", HUB_CSP);
+        headers.set("X-Content-Type-Options", "nosniff");
+    }
+    if (options.head) return new Response(null, { status: 200, headers });
+    let body = res.body;
+    if (mime === "text/html") {
+        // Hub pages must keep sending a full referrer, or their root-relative
+        // links can't be routed back to the hub.
+        body = (await res.text()).replace(/<meta\s+name=["']?referrer["']?[^>]*>/gi, "");
+        // An empty src resolves to the document URL, loading HTML as JavaScript.
+        body = body.replace(/<script\b(?=[^>]*\ssrc\s*=\s*(["'])\s*\1)[^>]*>\s*<\/script\s*>/gi, "");
+        for (const [marker, fix] of HTML_FIXES) if (body.includes(marker)) body = fix(body);
+        // Public CDN scripts support CORS, so report actual exceptions instead of "Script error.".
+        const cdnBase = /<base\b[^>]*href=["']https:\/\/(?:[^/]+\.jsdelivr\.net|esm\.sh)\//i.test(body);
+        body = body.replace(/(<script\b[^>]*>)([\s\S]*?)(<\/script\s*>)/gi, (whole, tag, code, end) => {
+            const src = /\bsrc=["']([^"']+)["']/i.exec(tag)?.[1];
+            if (!src || /\bcrossorigin\b/i.test(tag)) return whole;
+            const publicScript = JSDELIVR_RE.test(src) || /^https:\/\/esm\.sh\//.test(src)
+                || (cdnBase && !/^(?:[a-z][\w+.-]*:|\/\/)/i.test(src));
+            return publicScript ? tag.replace(/<script/i, '<script crossorigin="anonymous"') + code + end : whole;
+        });
+        const prelude = hub === "ugs"
+            ? '<script>try{parent.lgDebug&&parent.lgDebug(window)}catch(e){}</script>'
+            : STAY_FRAMED;
+        const inject = prelude + ESM_SYNC_XHR + ALLOW_SLOW_WEBGL;
+        body = /<head[^>]*>/i.test(body)
+            ? body.replace(/<head[^>]*>/i, (tag) => tag + inject)
+            : body.replace(/^(\s*<!doctype[^>]*>)?/i, (doctype) => doctype + inject);
+    }
+    return new Response(body, { status: 200, headers });
+}
+
+self.addEventListener("fetch", (event) => {
+    const url = new URL(event.request.url);
+    if (event.request.method === "HEAD" && url.origin === self.location.origin) {
+        const direct = hubPath(url.pathname);
+        if (direct) event.respondWith(fromMirrors(direct.path, direct.hub, { head: true }));
+        return;
+    }
+    if (event.request.method !== "GET") return;
+
+    // Game scripts request jsDelivr files themselves; those go through esm.sh too.
+    if (url.origin !== self.location.origin) {
+        // Two Unity unzip helpers repeat the game's folder in their JSZip URL.
+        url.pathname = url.pathname.replace(/\/(hide-n-seek|city-smash)\/main\/\1\/lib\/jszip\.min\.js$/, '/$1/lib/jszip.min.js');
+        const fix = CROSS_ORIGIN_FIXES.find(([re]) => re.test(url.href));
+        if (fix) {
+            event.respondWith(fix[1](event.request));
+            return;
+        }
+        if (!JSDELIVR_RE.test(url.href)) return;
+        event.respondWith((async () => {
+            const req = event.request;
+            let failed;
+            for (const source of [viaEsm(url.href), url.href, viaRaw(url.href)].filter(Boolean)) {
+                try {
+                    // Public CDNs allow CORS. Opaque responses hide HTTP errors and prevent fallback.
+                    const res = await fetchWithTimeout(source, {mode:"cors", credentials:"omit", headers:req.headers});
+                    if (res.ok) {
+                        const headers = new Headers(res.headers);
+                        const mime = mimeFor(url.pathname);
+                        if (mime) headers.set("Content-Type", mime);
+                        headers.delete("Content-Encoding"); headers.delete("Content-Length");
+                        let body = res.body;
+                        // Paper.io's SDK is next to its app bundle, not next to the HTML page.
+                        if (/\/435345345346@[^/]+\/js\/app-new-gm\.js$/.test(url.pathname)) {
+                            body = (await res.text())
+                                .replace("'sdk.js'", JSON.stringify(new URL("sdk.js", url.href).href))
+                                // The disabled promo feed otherwise fetches the HTML page as JSON.
+                                .replace("'JqIoy':_p2_0x465c('0xae')", "'JqIoy':'data:application/json,%7B%22banners%22:%5B%5D,%22interval%22:0%7D'");
+                        } else if (/\/genizy\/cc3d-mobile@[^/]+\/CrazyCattle3D\.audio\.position\.worklet\.js$/.test(url.pathname)) {
+                            body = (await res.text()).replaceAll(' ? .', '?.');
+                        } else if (/\/youtube-playables@[^/]+\/crossy-road\/scripts\/game\.min\.js$/.test(url.pathname)) {
+                            body = (await res.text()).replaceAll('Game.audioManager.SetVolume(', 'Game.audioManager?.SetVolume(');
+                        } else if (/\/LAMAR@[^/]+\/bobtherobber2\/bob-the-robber-2\.min\.f\.js$/.test(url.pathname)) {
+                            // Display banners are optional; an unavailable ad SDK must not reject into the game.
+                            body = (await res.text()).replace('Promise.reject("GD Sdk not available, probably due to adblocker")', 'Promise.resolve()')
+                                .replace(/gdsdk\.showAd\(s\.display,\s*\{\s*containerId: this\.element\.id\s*\}\)/, '$&.catch(() => {})');
+                        } else if (/\/Replku\/Ovo@[^/]+\/unlockalllevels\.js$/.test(url.pathname)) {
+                            // The mod can load twice; keep its translation cache in a dedicated reusable global.
+                            body = (await res.text()).replace(/\bcache\b/g, 'ovoTranslationCache')
+                                .replace('let ovoTranslationCache = {};', 'var ovoTranslationCache = globalThis.ovoTranslationCache || {};')
+                                .replace(/async function getTranslations\(\) \{[\s\S]*?\r?\n\}\r?\n\r?\nfunction listLanguages/,
+                                    `async function getTranslations() {
+                                        const json = await (await fetch('languages.json')).json();
+                                        c2_callFunction('Language > LoadLanguageFile', [JSON.stringify(json)]);
+                                        globalThis.languageJSON = json;
+                                        return json;
+                                    }\n\nfunction listLanguages`);
+                        } else if (/\/Synic-dx\/blackJack@[^/]+\/script\.js$/.test(url.pathname)) {
+                            body = (await res.text()).replace(/(\w+Sound)\.play\(\);/g, '$1.play().catch(() => {});');
+                        }
+                        return new Response(body, {status:res.status, headers});
+                    }
+                    failed = res;
+                } catch (_) { /* next public source */ }
+            }
+            return failed || new Response("Game asset unavailable", {status:502});
+        })());
+        return;
+    }
+
+    const buckshot = /^\/buckshot-roulette\/(buckshot-roulette\.(?:pck|wasm))$/.exec(url.pathname);
+    if (buckshot) {
+        event.respondWith(hostedGameAsset("buckshot-assets", "b3042ae7a56b2ede39ea4b4371b1d0ab3af8828a", buckshot[1]));
+        return;
+    }
+    if (url.pathname.startsWith("/burrito-bison/") || url.pathname.startsWith("/slope/") || url.pathname.startsWith("/ruffle/") || url.pathname.startsWith("/polytrack/") || url.pathname.startsWith("/doodle-jump/") || url.pathname.startsWith("/buckshot-roulette/") || url.pathname.startsWith("/draw-joust/")) return;
+
+    const hosted = /^\/(celeste-assets|snow-rider-assets|buckshot-assets)\/([a-f0-9]{40})\/(.+)$/.exec(url.pathname);
+    if (hosted) {
+        event.respondWith(hostedGameAsset(hosted[1], hosted[2], hosted[3]));
+        return;
+    }
+
+    const direct = hubPath(url.pathname);
+    if (direct) {
+        event.respondWith(fromMirrors(direct.path, direct.hub, {source: url.searchParams.get("source"), retry: url.searchParams.has("retry")}));
+        return;
+    }
+
+    if (url.pathname === "/sw.js") return;
+    // The bounce out of a top-level hub page carries a hub referrer; it must reach the real 404 page.
+    if (event.request.mode === "navigate" && url.search === UNFRAME_QUERY) return;
+
+    event.respondWith((async () => {
+        const hub = await fromHubPage(event);
+        if (!hub) return fetch(event.request);
+        // A "../" from a hub's root page climbs out to "/hub/x"; on the real site the
+        // browser would have clamped it at the root, so drop the stray "hub" segment.
+        const path = url.pathname.replace(/^\/(hub\/)?/, "");
+        if (event.request.mode === "navigate") {
+            return Response.redirect("/hub/" + hub + "/" + path + url.search + url.hash, 302);
+        }
+        return fromMirrors(path, hub);
+    })());
+});
